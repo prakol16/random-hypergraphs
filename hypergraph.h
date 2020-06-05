@@ -7,6 +7,7 @@
 #include <random>
 #include <memory>
 #include "hashgens.h"
+#include "rng.h"
 
 // typedef std::function<Element(std::uint64_t maxHashValue, std::uint64_t value)> HashGen;
 
@@ -17,7 +18,7 @@ struct GraphVertex {
 
 class HyperGraph {
     public:
-        HyperGraph(std::size_t n, std::size_t m, std::mt19937_64& gen, std::shared_ptr<HashGen> hashGen);
+        HyperGraph(std::size_t n, std::size_t m, rng_state_t& gen, std::shared_ptr<HashGen> hashGen);
         bool isPeelable();
 
     private:

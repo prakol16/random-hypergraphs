@@ -5,10 +5,14 @@
 #include <bitset>
 #include <cassert>
 #include <functional>
+#include <algorithm>
 #include "hypergraph.h"
 #include "hashgens.h"
+#include "rng.h"
 
-static std::mt19937_64 gen(314159);
+// static std::mt19937_64 gen(314159);
+
+rng_state_t gen = {0xd76b564f3d5db25};
 
 static const double STEP_SIZE = 0.01;
 static const double BASIC_LOW_BOUND = 1.22;
@@ -47,14 +51,27 @@ static void generateBasicPvsMN() {
     }
 } 
 
-typedef std::function<std::shared_ptr<HashGen>(std::size_t)> HashGenFn;
-static void findMinM(std::size_t n, double stepSize, const HashGenFn& getHashGen, std::size_t forceMultiple, double mn) {
+typedef std::function<std::shared_ptr<HashGen>(std::size_t, std::size_t)> HashGenFn;
+
+std::shared_ptr<HashGen> makeOrdinaryGraph(std::size_t m, std::size_t unused) {
+    return std::make_shared<HashGenRandom>(m);
+}
+
+std::shared_ptr<HashGen> makeSegmentedGraph(std::size_t m, std::size_t ell) {
+    return std::make_shared<HashGenSegmented>(m, ell);
+}
+
+std::shared_ptr<HashGen> makeBandedGraph(std::size_t m, std::size_t band) {
+    return std::make_shared<HashGenLimBandwidth>(m, m > 3*band ? m / band : 3);
+}
+
+static double findMinM(std::size_t n, double stepSize, const HashGenFn& getHashGen, std::size_t forceMultiple, double mn, std::size_t param) {
     std::bitset<KEEP_LAST_N> successTrack;
     int numSuccesses = 0;
     for (std::size_t i = 0; i < 1000; ++i) {
         std::size_t m = (std::size_t) (n * mn);
         m = (m / forceMultiple) * forceMultiple;
-        HyperGraph graph(n, m, gen, getHashGen(m));
+        HyperGraph graph(n, m, gen, getHashGen(m, param));
         if (successTrack[KEEP_LAST_N - 1]) numSuccesses--;
         successTrack <<= 1;
 
@@ -70,14 +87,14 @@ static void findMinM(std::size_t n, double stepSize, const HashGenFn& getHashGen
         mn += step * (isPeelable ? -1 : 1);
     }
     std::cout << "n=" << n << " m/n=" << mn << std::endl;
+    return mn;
 }
 
 static void generateBasicConvergenceGraph() {
     std::uint64_t n = 100;
-    const HashGenFn fn = [](auto m) { return std::make_shared<HashGenRandom>(m); };
     for (std::size_t i = 2; i <= 6; ++i, n *= 10) {
-        findMinM(n, STEP_SIZE, fn, 1, BASIC_LOW_BOUND);
-        findMinM(n * 3, STEP_SIZE, fn, 1, BASIC_LOW_BOUND);
+        findMinM(n, STEP_SIZE, makeOrdinaryGraph, 1, BASIC_LOW_BOUND, 0);
+        findMinM(n * 3, STEP_SIZE, makeOrdinaryGraph, 1, BASIC_LOW_BOUND, 0);
     }
 }
 
@@ -86,12 +103,11 @@ static void generateSegmentConvergenceGraph() {
     for (std::size_t ell : ells) {
         std::cout << "l=" << ell << std::endl;
         std::uint64_t n = 100;
-        const HashGenFn fn = [ell](auto m) { return std::make_shared<HashGenSegmented>(m, ell); };
         for (std::size_t i = 2; i <= 6; ++i, n *= 10) {
             if (n > ell * 3)
-                findMinM(n, STEP_SIZE, fn, ell, ORIENTABLE_LOW_BOUND);
+                findMinM(n, STEP_SIZE, makeSegmentedGraph, ell, ORIENTABLE_LOW_BOUND, ell);
             if (n > ell)
-                findMinM(n * 3, STEP_SIZE, fn, ell, ORIENTABLE_LOW_BOUND);
+                findMinM(n * 3, STEP_SIZE, makeSegmentedGraph, ell, ORIENTABLE_LOW_BOUND, ell);
         }
     }
 }
@@ -101,10 +117,9 @@ static void generateBandLimConvergenceGraph() {
     for (std::size_t band : bandQuotients) {
         std::cout << "band=" << band << std::endl;
         std::uint64_t n = 100;
-        const HashGenFn fn = [band](auto m) { return std::make_shared<HashGenLimBandwidth>(m, m > 3*band ? m / band : 3); };
         for (std::size_t i = 2; i <= 6; ++i, n *= 10) {
-            findMinM(n, STEP_SIZE, fn, 1, ORIENTABLE_LOW_BOUND);
-            findMinM(n * 3, STEP_SIZE, fn, 1, ORIENTABLE_LOW_BOUND);
+            findMinM(n, STEP_SIZE, makeBandedGraph, 1, ORIENTABLE_LOW_BOUND, band);
+            findMinM(n * 3, STEP_SIZE, makeBandedGraph, 1, ORIENTABLE_LOW_BOUND, band);
         }
     }
 }
@@ -150,37 +165,102 @@ static void getBandGraphValuesFromN(std::size_t n, std::vector<std::size_t>& ban
 static void generateOptimalEllGraphForN(std::size_t n) {
     std::vector<std::size_t> ells;
     getEllGraphValuesFromN(n, ells);
-
+    std::cout << "n=" << n << std::endl;
     for (std::size_t ell : ells) {
-        const HashGenFn fn = [ell](auto m) { return std::make_shared<HashGenSegmented>(m, ell); };
         std::cout << "l=" << ell << " ";
-        findMinM(n, STEP_SIZE, fn, ell, ORIENTABLE_LOW_BOUND);
+        findMinM(n, STEP_SIZE, makeSegmentedGraph, ell, ORIENTABLE_LOW_BOUND, ell);
     }
 }
 
 static void generateOptimalBandGraphForN(std::size_t n) {
     std::vector<std::size_t> bands;
     getBandGraphValuesFromN(n, bands);
-
+    std::cout << "n=" << n << std::endl;
     for (std::size_t band : bands) {
-        const HashGenFn fn = [band](auto m) { return std::make_shared<HashGenLimBandwidth>(m, m / band); };
         std::cout << "band=" << band << " ";
-        findMinM(n, STEP_SIZE, fn, 1, ORIENTABLE_LOW_BOUND);
+        findMinM(n, STEP_SIZE, makeBandedGraph, 1, ORIENTABLE_LOW_BOUND, band);
     }
 }
 
-static void optimizeEllGivenN(std::size_t n) {
+typedef std::pair<std::size_t, double> result_t;
 
+static bool compareResults(const result_t& r1, const result_t& r2) {
+    return r1.second < r2.second;
+}
+
+static result_t optimizeParamGivenN(std::size_t n, const HashGenFn& fn,
+                                    std::size_t startParam, std::size_t stepBigParam, std::size_t stepSmallParam,
+                                    bool forceMultiple) {
+    std::vector<result_t> results;
+    std::size_t param = startParam;
+    std::cout << "n=" << n << std::endl;
+
+    std::size_t start = 0, end = 0;
+    for (std::size_t i = 0; i < 100; ++i, param += stepBigParam) {
+        std::cout << "param=" << param << " ";
+        double mn = findMinM(n, STEP_SIZE, fn, forceMultiple ? param : 1, ORIENTABLE_LOW_BOUND, param);
+        results.push_back(std::make_pair(param, mn));
+        if (results.size() > 1 && results[results.size() - 2].second < mn) {
+            std::cout << "# Increased! Backtracking..." << std::endl;
+            start = results.size() > 2 ? results[results.size() - 3].first : 5;
+            end = param;
+            break;
+        }
+    }
+
+    if (start == 0 && end == 0) {
+        std::cout << "# Could not find optimal value of param for n=" << n << std::endl;
+    }
+
+    for (param = start; param <= end; param += stepSmallParam) {
+        std::cout << "param=" << param << " ";
+        double mn = findMinM(n, STEP_SIZE, fn, forceMultiple ? param : 1, ORIENTABLE_LOW_BOUND, param);
+        results.push_back(std::make_pair(param, mn));
+    }
+
+    const std::size_t MIN_K = 5;
+    if (results.size() < MIN_K) {
+        std::cout << "# Not enough data to decide optimal param" << std::endl;
+        return std::make_pair(1, INFINITY);
+    }
+
+    std::partial_sort(results.begin(), results.begin() + MIN_K, results.end(), compareResults);
+    double meanParam = 0;
+    double meanMinimum = 0;
+    for (std::size_t i = 0; i < MIN_K; ++i) meanParam += (MIN_K - i ) * results[i].first;
+    for (std::size_t i = 0; i < MIN_K; ++i) meanMinimum += results[i].second;
+    meanParam /= (MIN_K * (MIN_K + 1));
+    meanParam *= 2;
+    meanMinimum /= 5;
+    std::cout << "optim_param=" << meanParam << " optim_m/n=" << meanMinimum << std::endl;
+    return std::make_pair((std::size_t) (meanParam + 0.5), meanMinimum);
 }
 
 int main() {
     std::cout.precision(10);
     fillPowCache();
-    generateBasicPvsMN();
-    generateBasicConvergenceGraph();
-    generateSegmentConvergenceGraph();
-    generateBandLimConvergenceGraph();
-    generateOptimalEllGraphForN(10000);
-    generateOptimalBandGraphForN(100000);
-    optimizeEllGivenN(10000);
+
+    // std::cout << "# Basic P vs m/n graph" << std::endl;
+    // generateBasicPvsMN();
+
+    // std::cout << "# Convergence graph (basic)" << std::endl;
+    // generateBasicConvergenceGraph();
+
+    // std::cout << "# Convergence graph (segmented)" << std::endl;
+    // generateSegmentConvergenceGraph();
+
+    // std::cout << "# Convergence graph (banded)" << std::endl;
+    // generateBandLimConvergenceGraph();
+
+    // std::cout << "# m/n vs l graph for fixed n" << std::endl;
+    // generateOptimalEllGraphForN(10000);
+    
+    // std::cout << "# m/n vs band graph for fixed n" << std::endl;
+    // generateOptimalBandGraphForN(100000);
+
+    // std::cout << "# optimal l given n" << std::endl;
+    // optimizeParamGivenN(10000, makeSegmentedGraph, 12, 20, 2, true);
+
+    std::cout << "# optimal band given n" << std::endl;
+    optimizeParamGivenN(10000, makeBandedGraph, 6, 10, 2, false);
 }

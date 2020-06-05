@@ -1,11 +1,11 @@
 #include "hypergraph.h"
 #include "hashgens.h"
 
-HyperGraph::HyperGraph(std::size_t n, std::size_t m, std::mt19937_64& gen, std::shared_ptr<HashGen> hashGen) 
+HyperGraph::HyperGraph(std::size_t n, std::size_t m, rng_state_t& gen, std::shared_ptr<HashGen> hashGen) 
                 : m_n(n), maxHashValue(m), m_hashGen(hashGen){
     vertices.resize(m);
     for (std::size_t i = 0; i < n; ++i) {
-        std::uint64_t value = gen();
+        std::uint64_t value = genRandom(gen);
         Element e = m_hashGen->get(value);
         vertices[e.h0].count++;
         vertices[e.h0].xormask ^= value;
