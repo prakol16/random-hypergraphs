@@ -227,40 +227,67 @@ static result_t optimizeParamGivenN(std::size_t n, const HashGenFn& fn,
     std::partial_sort(results.begin(), results.begin() + MIN_K, results.end(), compareResults);
     double meanParam = 0;
     double meanMinimum = 0;
-    for (std::size_t i = 0; i < MIN_K; ++i) meanParam += (MIN_K - i ) * results[i].first;
+    for (std::size_t i = 0; i < MIN_K; ++i) meanParam += (MIN_K - i) * results[i].first;
     for (std::size_t i = 0; i < MIN_K; ++i) meanMinimum += results[i].second;
-    meanParam /= (MIN_K * (MIN_K + 1));
-    meanParam *= 2;
+    meanParam /= (MIN_K * (MIN_K + 1) / 2);
     meanMinimum /= 5;
-    std::cout << "optim_param=" << meanParam << " optim_m/n=" << meanMinimum << std::endl;
+    std::cout << "n=" << n << " optim_param=" << meanParam << " optim_m/n=" << meanMinimum << std::endl;
     return std::make_pair((std::size_t) (meanParam + 0.5), meanMinimum);
+}
+
+static void generateOptimalEllGraph(void) {
+    std::size_t n = 1000;
+    for (std::size_t i = 2; i <= 6; ++i, n *= 10) {
+        optimizeParamGivenN(n,     makeSegmentedGraph, 12, 20, 2, true);
+        optimizeParamGivenN(n * 2, makeSegmentedGraph, 12, 20, 2, true);
+        optimizeParamGivenN(n * 5, makeSegmentedGraph, 12, 20, 2, true);
+    }
+}
+
+static void generateOptimalBandGraph(void) {
+    std::size_t n = 1000;
+    for (std::size_t i = 2; i <= 6; ++i, n *= 10) {
+        optimizeParamGivenN(n,     makeBandedGraph, 6, 10, 2, false);
+        optimizeParamGivenN(n * 2, makeBandedGraph, 6, 10, 2, false);
+        optimizeParamGivenN(n * 5, makeBandedGraph, 6, 10, 2, false);
+    }
 }
 
 int main() {
     std::cout.precision(10);
     fillPowCache();
 
-    // std::cout << "# Basic P vs m/n graph" << std::endl;
-    // generateBasicPvsMN();
+    std::cout << "# Basic P vs m/n graph" << std::endl;
+    generateBasicPvsMN();
 
-    // std::cout << "# Convergence graph (basic)" << std::endl;
-    // generateBasicConvergenceGraph();
+    std::cout << "# Convergence graph (basic)" << std::endl;
+    generateBasicConvergenceGraph();
 
-    // std::cout << "# Convergence graph (segmented)" << std::endl;
-    // generateSegmentConvergenceGraph();
+    std::cout << "# Convergence graph (segmented)" << std::endl;
+    generateSegmentConvergenceGraph();
 
-    // std::cout << "# Convergence graph (banded)" << std::endl;
-    // generateBandLimConvergenceGraph();
+    std::cout << "# Convergence graph (banded)" << std::endl;
+    generateBandLimConvergenceGraph();
 
-    // std::cout << "# m/n vs l graph for fixed n" << std::endl;
-    // generateOptimalEllGraphForN(10000);
+    std::cout << "# m/n vs l graph for fixed n" << std::endl;
+    generateOptimalEllGraphForN(10000);
+    generateOptimalEllGraphForN(30000);
+    generateOptimalEllGraphForN(100000);
     
-    // std::cout << "# m/n vs band graph for fixed n" << std::endl;
-    // generateOptimalBandGraphForN(100000);
+    std::cout << "# m/n vs band graph for fixed n" << std::endl;
+    generateOptimalBandGraphForN(30000);
+    generateOptimalBandGraphForN(100000);
+    generateOptimalBandGraphForN(300000);
 
     // std::cout << "# optimal l given n" << std::endl;
     // optimizeParamGivenN(10000, makeSegmentedGraph, 12, 20, 2, true);
 
-    std::cout << "# optimal band given n" << std::endl;
-    optimizeParamGivenN(10000, makeBandedGraph, 6, 10, 2, false);
+    // std::cout << "# optimal band given n" << std::endl;
+    // optimizeParamGivenN(10000, makeBandedGraph, 6, 10, 2, false);
+
+    std::cout << "# Optimal l graph" << std::endl;
+    generateOptimalEllGraph();
+
+    std::cout << "# Optimal band graph" << std::endl;
+    generateOptimalBandGraph();
 }
